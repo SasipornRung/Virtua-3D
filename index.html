@@ -1,129 +1,40 @@
 <!doctype html>
 <html lang="th">
 <head>
-  <meta charset="utf-8" />
-  <title>Mini 3D Walkthrough (non-module)</title>
-  <style>
-    html,body{margin:0;height:100%;background:#111;overflow:hidden}
-    #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-      background:rgba(0,0,0,.7);color:#fff;font:16px/1.6 system-ui;text-align:center;padding:24px}
-    #hint{position:fixed;left:12px;bottom:12px;color:#fff;opacity:.7;font:12px system-ui}
-    button{background:#10b981;color:#0b1d16;border:none;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer}
-  </style>
+  <meta charset="utf-8">
+  <title>Virtual Walkthrough – A-Frame</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>html,body{margin:0;height:100%;background:#111}</style>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 </head>
 <body>
-<div id="overlay">
-  <div>
-    <h2 style="margin-top:0">คลิกเพื่อเริ่ม (ล็อกเมาส์)</h2>
-    <p>เมาส์=หันมุมมอง • WASD/ลูกศร=เดิน • Shift=วิ่ง</p>
-    <button id="start">เริ่ม Walkthrough</button>
-  </div>
-</div>
-<div id="hint">WASD/ลูกศร เดิน • เมาส์ หันมุมมอง • Esc ออกจากโหมดเมาส์</div>
+  <a-scene renderer="antialias:true" background="color: #101418">
+    <!-- กล้อง + การควบคุม: เมาส์ลากหันมุมมอง, WASD/ลูกศร เดิน -->
+    <a-entity id="rig" position="0 1.6 0" movement-controls>
+      <a-entity camera look-controls wasd-controls="acceleration: 8"></a-entity>
+    </a-entity>
 
-<!-- three.js (UMD) -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<!-- controls (non-module, ผูกกับ THREE.PointerLockControls) -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/PointerLockControls.js"></script>
+    <!-- พื้น -->
+    <a-plane position="0 0 0" rotation="-90 0 0" width="20" height="20" color="#2a2f34"></a-plane>
 
-<script>
-let scene, camera, renderer, controls;
-let velocity = new THREE.Vector3(), direction = new THREE.Vector3();
-const key = {w:false,a:false,s:false,d:false,left:false,right:false,up:false,down:false,shift:false};
-let prev = performance.now();
+    <!-- ผนังห้องสี่เหลี่ยม 8x8 สูง 3ม. -->
+    <a-box position="0 1.5 -4" depth="0.12" width="8" height="3" color="#1f2937"></a-box>
+    <a-box position="0 1.5  4" depth="0.12" width="8" height="3" color="#1f2937"></a-box>
+    <a-box position="-4 1.5 0" depth="8" width="0.12" height="3" color="#1f2937"></a-box>
+    <a-box position=" 4 1.5 0" depth="8" width="0.12" height="3" color="#1f2937"></a-box>
 
-scene = new THREE.Scene();
-scene.background = new THREE.Color(0x101418);
-camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+    <!-- หน้าต่าง (ช่องว่าง) ใช้คานบน/ล่างแทน -->
+    <a-box position="0 2.0 4" depth="0.12" width="2.2" height="0.2" color="#1f2937"></a-box>
+    <a-box position="0 0.2 4" depth="0.12" width="2.2" height="0.2" color="#1f2937"></a-box>
 
-renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-document.body.appendChild(renderer.domElement);
+    <!-- เฟอร์ตัวอย่าง -->
+    <a-box position="0 0.3 0"  width="1.4" height="0.6" depth="0.8" color="#3b82f6"></a-box>
+    <a-box position="-2 0.25 -1.2" width="1.2" height="0.5" depth="0.6" color="#f59e0b"></a-box>
+    <a-box position="2 0.45 1.2" width="1.0" height="0.9" depth="0.6" color="#10b981"></a-box>
 
-// lights
-scene.add(new THREE.HemisphereLight(0xffffff, 0x222233, 0.7));
-const dir = new THREE.DirectionalLight(0xffffff, .8); dir.position.set(5,10,2); dir.castShadow=true; scene.add(dir);
-
-// floor
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(20,20),
-  new THREE.MeshStandardMaterial({color:0x2a2f34,roughness:.9}));
-floor.rotation.x = -Math.PI/2; floor.receiveShadow=true; scene.add(floor);
-
-// room
-const roomSize=8, h=3, wallMat=new THREE.MeshStandardMaterial({color:0x1f2937,roughness:.8});
-function wall(w,hh,d,x,y,z){const m=new THREE.Mesh(new THREE.BoxGeometry(w,hh,d), wallMat);
-  m.position.set(x,y,z); m.castShadow=m.receiveShadow=true; scene.add(m); return m;}
-wall(roomSize,h,.12, 0,h/2,-roomSize/2);
-wall(roomSize,h,.12, 0,h/2, roomSize/2);
-wall(.12,h,roomSize, -roomSize/2,h/2,0);
-wall(.12,h,roomSize,  roomSize/2,h/2,0);
-// window
-const winW=2.2; wall((roomSize-winW)/2,1.8,.12,-((roomSize/2)-(roomSize-winW)/4 - winW/2),1.1,roomSize/2);
-wall((roomSize-winW)/2,1.8,.12, ((roomSize/2)-(roomSize-winW)/4 - winW/2),1.1,roomSize/2);
-wall(winW,.2,.12,0,2.0,roomSize/2); wall(winW,.2,.12,0,.2,roomSize/2);
-
-// props
-function box(x,y,z,w=1,h=.6,d=.6,c){const mat=new THREE.MeshStandardMaterial({color:c||0x374151});
-  const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); b.position.set(x,y,z); b.castShadow=b.receiveShadow=true; scene.add(b);}
-box(0,.3,0,1.4,.6,.8,0x3b82f6); box(-2,.25,-1.2,1.2,.5,.6,0xf59e0b); box(2,.45,1.2,1.0,.9,.6,0x10b981);
-
-// sky
-const sky=new THREE.Mesh(new THREE.BoxGeometry(200,100,200),
-  new THREE.MeshBasicMaterial({color:0x0b1220, side:THREE.BackSide}));
-scene.add(sky);
-
-// controls
-controls = new THREE.PointerLockControls(camera, document.body);
-camera.position.set(0,1.6,0);
-document.getElementById('start').addEventListener('click', ()=>{
-  controls.lock();
-  document.getElementById('overlay').style.display='none';
-});
-controls.addEventListener('unlock', ()=>{document.getElementById('overlay').style.display='flex';});
-
-// keys
-function onKey(e,down){
-  switch(e.code){
-    case 'KeyW': case 'ArrowUp':    key.w=key.up=down; break;
-    case 'KeyS': case 'ArrowDown':  key.s=key.down=down; break;
-    case 'KeyA': case 'ArrowLeft':  key.a=key.left=down; break;
-    case 'KeyD': case 'ArrowRight': key.d=key.right=down; break;
-    case 'ShiftLeft': case 'ShiftRight': key.shift=down; break;
-  }
-}
-addEventListener('keydown', e=>onKey(e,true));
-addEventListener('keyup',   e=>onKey(e,false));
-
-// clamp inside room
-function clampInsideRoom(pos){
-  const m=.35;
-  pos.x=Math.max(-roomSize/2+m, Math.min(roomSize/2-m, pos.x));
-  pos.z=Math.max(-roomSize/2+m, Math.min(roomSize/2-m, pos.z));
-  pos.y=1.6;
-}
-
-function animate(){
-  requestAnimationFrame(animate);
-  const now=performance.now(), delta=(now-prev)/1000; prev=now;
-  const f=(key.w||key.up)?1:(key.s||key.down)?-1:0;
-  const s=(key.d||key.right)?1:(key.a||key.left)?-1:0;
-  direction.set(s,0,-f).normalize();
-  const speed = key.shift?4.0:2.2;
-  if(controls.isLocked){
-    controls.moveRight(direction.x*speed*delta);
-    controls.moveForward(-direction.z*speed*delta);
-    clampInsideRoom(controls.getObject().position);
-  }
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.render(scene, camera);
-}
-animate();
-
-addEventListener('resize', ()=>{
-  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
-</script>
+    <!-- แสง -->
+    <a-entity light="type:hemisphere; intensity:0.8; color:#fff; groundColor:#222"></a-entity>
+    <a-entity light="type:directional; intensity:0.7" position="5 10 2"></a-entity>
+  </a-scene>
 </body>
 </html>
