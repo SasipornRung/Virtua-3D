@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title>Mini 3D Walkthrough (Three.js)</title>
+  <style>
+    html, body { margin:0; height:100%; background:#111; overflow:hidden; }
+    #overlay {
+      position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.7); color:#fff; font:16px/1.6 system-ui, sans-serif; text-align:center; padding:24px;
+    }
+    #hint { position:fixed; left:12px; bottom:12px; color:#fff; opacity:.7; font:12px system-ui; }
+    button {
+      background:#10b981; color:#0b1d16; border:none; padding:10px 16px; border-radius:8px;
+      font-weight:700; cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+<div id="overlay">
+  <div>
+    <h2 style="margin-top:0">คลิกเพื่อเริ่ม (ล็อกเมาส์)</h2>
+    <p>เมาส์=หันมุมมอง • WASD/ลูกศร=เดิน • Space=กระโดด • Shift=วิ่ง</p>
+    <button id="start">เริ่ม Walkthrough</button>
+  </div>
+</div>
+<div id="hint">WASD/ลูกศร เดิน • เมาส์ หันมุมมอง • Esc ออกจากโหมดเมาส์</div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import { PointerLockControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/PointerLockControls.js";
+
+let scene, camera, renderer, controls;
+let velocity = new THREE.Vector3(), direction = new THREE.Vector3();
+const key = { w:false, a:false, s:false, d:false, left:false, right:false, up:false, down:false, shift:false };
+let prev = performance.now();
+
+// --- init ---
+scene = new THREE.Scene();
+scene.background = new THREE.Color(0x101418);
+camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+
+renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+// lights
+const hemi = new THREE.HemisphereLight(0xffffff, 0x222233, 0.7);
+scene.add(hemi);
+const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+dir.position.set(5, 10, 2);
+dir.castShadow = true;
+scene.add(dir);
+
+// floor
+const floorMat = new THREE.MeshStandardMaterial({ color:0x2a2f34, roughness:0.9, metalness:0.0 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), floorMat);
+floor.rotation.x = -Math.PI/2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// walls (ห้องสี่เหลี่ยม 8x8 สูง 3 เมตร)
+const roomSize = 8, height = 3;
+const wallMat = new THREE.MeshStandardMaterial({ color:0x1f2937, roughness:0.8 });
+const mkWall = (w,h,d,x,y,z,rx=0,ry=0,rz=0) => {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), wallMat);
+  m.position.set(x,y,z); m.rotation.set(rx,ry,rz); m.receiveShadow = m.castShadow = true;
+  scene.add(m); return m;
+};
+mkWall(roomSize, height, 0.1, 0, height/2, -roomSize/2); // ด้านหลัง
+mkWall(roomSize, height, 0.1, 0, height/2,  roomSize/2); // ด้านหน้า
+mkWall(0.1, height, roomSize, -roomSize/2, height/2, 0); // ซ้าย
+mkWall(0.1, height, roomSize,  roomSize/2, height/2, 0); // ขวา
+
+// “หน้าต่าง” เป็นช่องว่างบนผนังด้านหน้า
+const winW=2.2, winH=1.4;
+const leftCut = mkWall((roomSize-winW)/2, 1.8, 0.12, -((roomSize/2)-(roomSize-winW)/4 - winW/2), 1.1,  roomSize/2);
+const rightCut= mkWall((roomSize-winW)/2, 1.8, 0.12,  ((roomSize/2)-(roomSize-winW)/4 - winW/2),  1.1, roomSize/2);
+// คานบน/ล่างหน้าต่าง
+mkWall(winW, 0.2, 0.12, 0, 2.0, roomSize/2);
+mkWall(winW, 0.2, 0.12, 0, 0.2, roomSize/2);
+
+// props (เฟอร์นิเจอร์กล่อง)
+const boxMat = new THREE.MeshStandardMaterial({ color:0x374151 });
+const mkBox = (x,y,z, w=1,h=0.6,d=0.6, color) => {
+  const mat = boxMat.clone(); if(color) mat.color = new THREE.Color(color);
+  const b = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+  b.position.set(x,y,z); b.castShadow = true; b.receiveShadow = true; scene.add(b);
+};
+mkBox(0, 0.3, 0, 1.4, 0.6, 0.8, 0x3b82f6);      // โซฟาเตี้ย
+mkBox(-2, 0.25, -1.2, 1.2, 0.5, 0.6, 0xf59e0b); // ตู้เตี้ย
+mkBox( 2, 0.45,  1.2, 1.0, 0.9, 0.6, 0x10b981); // ชั้นวาง
+
+// “วิวเมือง” ภายนอก (กล่องใหญ่เป็นพื้นหลังไกล ๆ)
+const skyGeo = new THREE.BoxGeometry(200, 100, 200);
+const skyMat = new THREE.MeshBasicMaterial({ color:0x0b1220, side:THREE.BackSide });
+const sky = new THREE.Mesh(skyGeo, skyMat);
+scene.add(sky);
+
+// controls (Pointer Lock = FPS)
+controls = new PointerLockControls(camera, document.body);
+camera.position.set(0, 1.6, 0); // ความสูงสายตา
+document.getElementById('start').addEventListener('click', () => {
+  controls.lock();
+  document.getElementById('overlay').style.display = 'none';
+});
+controls.addEventListener('unlock', () => {
+  document.getElementById('overlay').style.display = 'flex';
+});
+
+// keyboard
+function onKey(e, down) {
+  switch(e.code) {
+    case 'KeyW': case 'ArrowUp':    key.w = key.up = down; break;
+    case 'KeyS': case 'ArrowDown':  key.s = key.down = down; break;
+    case 'KeyA': case 'ArrowLeft':  key.a = key.left = down; break;
+    case 'KeyD': case 'ArrowRight': key.d = key.right = down; break;
+    case 'ShiftLeft': case 'ShiftRight': key.shift = down; break;
+    case 'Space': /* jump (option) */ break;
+  }
+}
+addEventListener('keydown', e=>onKey(e,true));
+addEventListener('keyup',   e=>onKey(e,false));
+
+// simple collision: กันไม่ให้ออกนอกห้อง (ชนผนัง)
+function clampInsideRoom(pos) {
+  const margin = 0.35;
+  pos.x = Math.max(-roomSize/2+margin, Math.min(roomSize/2-margin, pos.x));
+  pos.z = Math.max(-roomSize/2+margin, Math.min(roomSize/2-margin, pos.z));
+  pos.y = 1.6; // ความสูงกล้องคงที่
+}
+
+// animate
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const delta = (now - prev) / 1000;
+  prev = now;
+
+  // เดิน
+  direction.set(0,0,0);
+  const forward = (key.w||key.up) ? 1 : (key.s||key.down) ? -1 : 0;
+  const strafe  = (key.d||key.right) ? 1 : (key.a||key.left) ? -1 : 0;
+  direction.z = -forward;
+  direction.x =  strafe;
+  direction.normalize();
+
+  const speed = (key.shift ? 4.0 : 2.2);
+  velocity.x = direction.x * speed * delta;
+  velocity.z = direction.z * speed * delta;
+
+  if (controls.isLocked) {
+    controls.moveRight(velocity.x);
+    controls.moveForward(velocity.z);
+
+    // กันออกนอกห้อง
+    clampInsideRoom(controls.getObject().position);
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// resize
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
