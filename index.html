@@ -2,46 +2,127 @@
 <html lang="th">
 <head>
   <meta charset="utf-8" />
-  <title>Mini 360 Tour</title>
+  <title>WOW Bedroom – 360 Mini Tour</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html,body{margin:0;height:100%;background:#0f1115;font-family:system-ui,sans-serif}
+    .badge{position:fixed;left:12px;top:12px;color:#fff;opacity:.8;font-size:12px}
+    .cta{position:fixed;right:12px;bottom:12px;color:#0b1d16;background:#10b981;
+         font-weight:700;padding:8px 12px;border-radius:10px}
+    /* วงกลม Hotspot ให้ดู “ว้าว” หน่อย */
+    .pulse{
+      animation:pulse 1.4s infinite;
+      box-shadow:0 0 0 0 rgba(16,185,129,.7);
+      border-radius:50%;
+    }
+    @keyframes pulse{
+      0%{box-shadow:0 0 0 0 rgba(16,185,129,.7)}
+      70%{box-shadow:0 0 0 18px rgba(16,185,129,0)}
+      100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}
+    }
+  </style>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <style>html,body{margin:0;height:100%;background:#111}</style>
 </head>
 <body>
-<a-scene>
-  <a-assets>
-    <img id="living"  src="living.jpg">
-    <img id="bedroom" src="bedroom.jpg">
-  </a-assets>
+  <div class="badge">ลากเมาส์/นิ้ว = หันมุมมอง • แตะ/คลิกที่วงกลมเพื่อสลับมุม</div>
+  <div class="cta">Bedroom • WOW Tour</div>
 
-  <!-- ท้องฟ้า/ภาพ 360 ปัจจุบัน -->
-  <a-sky id="sky" src="#living" rotation="0 -90 0"></a-sky>
+  <a-scene background="color:#0f1115" renderer="antialias:true">
+    <a-assets>
+      <img id="main"   src="bedroom_main.jpg">
+      <img id="window" src="bedroom_window.jpg">
+      <img id="closet" src="bedroom_closet.jpg">
+    </a-assets>
 
-  <!-- กล้อง + เดิน/หมุน -->
-  <a-entity id="rig" position="0 1.6 0" movement-controls>
-    <a-entity camera look-controls wasd-controls="acceleration:8"></a-entity>
-  </a-entity>
+    <!-- สกายสองชั้นสำหรับ crossfade -->
+    <a-entity id="skyWrap">
+      <a-sky id="skyA" radius="500" rotation="0 -90 0"
+             material="shader:flat; src:#main; transparent:true; opacity:1"></a-sky>
+      <a-sky id="skyB" radius="500" rotation="0 -90 0"
+             visible="false"
+             material="shader:flat; src:#window; transparent:true; opacity:0"></a-sky>
+    </a-entity>
 
-  <!-- Hotspot ไปห้องนอน -->
-  <a-entity position="0 1.6 -2">
-    <a-circle id="toBed" radius="0.12" color="#10b981" opacity="0.9" class="clickable"></a-circle>
-    <a-text value="Bedroom" align="center" color="#fff" position="0 -0.25 0" width="2"></a-text>
-  </a-entity>
+    <!-- กล้อง + เคอร์เซอร์คลิก (รองรับเมาส์/ทัช) -->
+    <a-entity id="rig" position="0 1.6 0" movement-controls>
+      <a-entity camera look-controls></a-entity>
+      <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
+    </a-entity>
 
-  <!-- Hotspot กลับห้องรับแขก -->
-  <a-entity position="1 1.4 1">
-    <a-circle id="toLiving" radius="0.12" color="#3b82f6" opacity="0.9" class="clickable"></a-circle>
-    <a-text value="Living" align="center" color="#fff" position="0 -0.25 0" width="2"></a-text>
-  </a-entity>
+    <!-- Hotspot: ไป "วิวหน้าต่าง" -->
+    <a-entity position="0 1.6 -2">
+      <a-circle id="hsWindow" class="clickable" radius="0.14" color="#10b981" opacity="0.95"></a-circle>
+      <a-text value="มุมหน้าต่าง" align="center" color="#fff" position="0 -0.28 0" width="2"></a-text>
+    </a-entity>
 
-  <a-entity light="type:hemisphere; intensity:1"></a-entity>
-</a-scene>
+    <!-- Hotspot: ไป "มุมตู้เสื้อผ้า" -->
+    <a-entity position="1.6 1.4 0.6">
+      <a-circle id="hsCloset" class="clickable" radius="0.14" color="#3b82f6" opacity="0.95"></a-circle>
+      <a-text value="มุมตู้/แต่งตัว" align="center" color="#fff" position="0 -0.28 0" width="2"></a-text>
+    </a-entity>
 
-<script>
-  const sky = document.querySelector('#sky');
-  const toBed = document.querySelector('#toBed');
-  const toLiving = document.querySelector('#toLiving');
-  toBed.addEventListener('click',  () => sky.setAttribute('src', '#bedroom'));
-  toLiving.addEventListener('click',()=> sky.setAttribute('src', '#living'));
-</script>
+    <!-- Hotspot: กลับ "มุมหลัก" -->
+    <a-entity position="-1.4 1.4 0.8">
+      <a-circle id="hsBack" class="clickable" radius="0.12" color="#f59e0b" opacity="0.95"></a-circle>
+      <a-text value="กลับมุมหลัก" align="center" color="#fff" position="0 -0.26 0" width="2"></a-text>
+    </a-entity>
+
+    <!-- แสงนุ่ม ๆ ให้ hotspot/readable -->
+    <a-entity light="type:hemisphere; intensity:1.2; color:#fff; groundColor:#222"></a-entity>
+  </a-scene>
+
+  <script>
+    const skyA = document.querySelector('#skyA');
+    const skyB = document.querySelector('#skyB');
+    let showingA = true;
+
+    function crossfadeTo(imgSelector){
+      const next = document.querySelector(imgSelector);
+      if (showingA){
+        skyB.setAttribute('material','shader:flat; src:'+imgSelector+'; transparent:true; opacity:0');
+        skyB.setAttribute('visible', true);
+        // fade A out / B in
+        skyA.emit('fadeOut');
+        skyB.emit('fadeIn');
+      }else{
+        skyA.setAttribute('material','shader:flat; src:'+imgSelector+'; transparent:true; opacity:0');
+        skyA.setAttribute('visible', true);
+        skyB.emit('fadeOut');
+        skyA.emit('fadeIn');
+      }
+      showingA = !showingA;
+    }
+
+    // สร้าง animation component แบบง่ายสำหรับ fade
+    AFRAME.registerComponent('fader', {
+      init: function(){
+        this.el.setAttribute('animation__in',{
+          property:'material.opacity', from:0, to:1, dur:600, startEvents:'fadeIn', easing:'easeOutQuad'
+        });
+        this.el.setAttribute('animation__out',{
+          property:'material.opacity', from:1, to:0, dur:600, startEvents:'fadeOut', easing:'easeInQuad',
+        });
+        this.el.addEventListener('animationcomplete__out', ()=>{ // ซ่อนตัวที่จางหาย
+          if(this.el.getAttribute('material').opacity===0) this.el.setAttribute('visible', false);
+        });
+      }
+    });
+    skyA.setAttribute('fader',''); skyB.setAttribute('fader','');
+
+    // ผูกคลิก hotspot
+    const hsWindow = document.querySelector('#hsWindow');
+    const hsCloset = document.querySelector('#hsCloset');
+    const hsBack   = document.querySelector('#hsBack');
+
+    // เพิ่มเอฟเฟ็กต์ pulse ขอบวงกลม (ด้วย DOM class)
+    [hsWindow, hsCloset, hsBack].forEach(h => {
+      const el = h.components.material?.material; // ไม่ใช้ ติด class ให้ตัว a-circle
+      h.classList.add('pulse');
+    });
+
+    hsWindow.addEventListener('click', ()=> crossfadeTo('#window'));
+    hsCloset.addEventListener('click', ()=> crossfadeTo('#closet'));
+    hsBack.addEventListener('click',   ()=> crossfadeTo('#main'));
+  </script>
 </body>
 </html>
